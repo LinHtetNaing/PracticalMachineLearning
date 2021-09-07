@@ -1,0 +1,146 @@
+---
+title: "Prediction of Exercise Manners"
+author: "Lin Htet Naing"
+date: "9/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+The goal of the project is to predict the manner in which study participants did the exercise. 
+
+## Data
+
+The training data for this project are from here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are from here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Data cleaning
+```{r loading data}
+library(randomForest) 
+library(caret)
+library(lattice) 
+library(ggplot2)
+library(rpart) 
+library(rpart.plot)
+
+#Load datasets
+trainingset <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+testingset <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+```
+
+Looking into data sets and relevant exploratory data analysis are done. The data sets contain variables which cannot be used for prediction and variables with 'NA' values. 
+Data cleaning is performed to get tidy data sets which are ready to use for the required analysis.
+For reproducibilty, set.seed(1) is set.
+
+```{r data cleaning}
+set.seed(1)
+#Delete columns with all missing values
+trainingset<-trainingset[,colSums(is.na(trainingset)) == 0]
+testingset <-testingset[,colSums(is.na(testingset)) == 0]
+
+#Delete variables which cannot be use or are irrelevant to the project such as: user_name, raw_timestamp_part_1, raw_timestamp_part_, etc.
+trainingset   <-trainingset[,-c(1:7)]
+testingset <-testingset[,-c(1:7)]
+
+#Data partition - 75% of the training dataset into training (myTrain) and the remaining 25% to testing (myTest)
+inTrain <- createDataPartition(y=trainingset$classe, p=0.75, list=FALSE) 
+myTrain <- trainingset[inTrain, ] 
+myTest <- trainingset[-inTrain, ]
+
+#Check complete cases
+completeCase <- complete.cases(myTrain)
+nrows <- nrow(myTrain)
+sum(completeCase) == nrows 
+```
+The result 'TRUE' confirms that observations included in myTrain dataset are complete.
+
+```{r data cleaning 2}
+completeCase <- complete.cases(myTest)
+nrows <- nrow(myTest)
+sum(completeCase) == nrows
+
+```
+Also, observations in myTest are complete.
+
+
+```{r data cleaning 3}
+#Convert the variable 'classe' to factor
+myTrain$classe <- as.factor(myTrain$classe)
+myTest$classe <- as.factor(myTest$classe)
+
+table(myTrain$classe)
+```
+According to the table, the frequencies of four classes (B, C, D and E) are not much different from each other but class A has the highest frequency. 
+
+## Procedure
+The manner (outcome) represented by the variable 'classe' will be predicted by using the most accurate model. The variable 'classe' contains five levels of factor from A to E. Each class represents a specific manner in which participants did exercise. 
+Two models - random forest and decision tree will be tested, and the model with the highest accuracy will be selected as final model and used for prediction of manner in testing data set.
+
+Original training data set contains a large number of observations which are sufficient to divide the data set into two. The training data set are divided randomly into two subsamples: myTrain data set (75% of original data) and myTest data set (25% of original data). For cross validation, models fitted by using myTrain data set will be tested on the myTest data set. 
+
+## Fitting Models
+### Random Forest
+```{r Model fittings}
+#Models
+#Random Forest
+model1 <- randomForest(classe ~., data = myTrain)
+model1
+```
+
+#### Prediction on myTest using model 1 (Random Forest)
+```{r Prediction RF}
+#Prediction model1
+predictModel1 <- predict(model1, newdata = myTest, class = "class")
+Model1CM <- confusionMatrix(predictModel1, myTest$classe)
+Model1CM
+```
+The accuracy for prediction using random forest is 0.9931 and the expected out of sample error rate is 0.0069.
+
+### Decision Tree
+```{r Decision Tree}
+#Decision Tree
+model2 <- rpart(classe ~., data = myTrain, method = "class")
+rpart.plot(model2,  main = "Classification by Decision Tree")
+```
+
+#### Prediction on myTest using model 2 (Decision Tree)
+```{r Prediction DT}
+#Prediction Model2
+predictModel2 <- predict(model2, newdata = myTest, type = "class")
+Model2CM <- confusionMatrix(predictModel2, myTest$classe)
+Model2CM
+```
+The accuracy for prediction by decision tree is 0.7274 and the expected out of sample error is 0.2726.
+
+
+## Prediction on Testing data set
+```{r Prediction Testing dataset}
+#Model1 Random Forest
+RFtesting <- predict(model1, newdata = testingset)
+RFtesting
+
+#Model2 Decision Tree
+DTtesting <- predict(model2, newdata = testingset, type = "class")
+DTtesting
+```
+
+## Final Model
+According to the results, random forest is more accurate than decision tree model (accuracy 0.99 vs 0.72) and performed better. Therefore, model using random forest is selected as final model for prediction of exercise manners in testing data set.
+The expected out of error of the final model is 0.2726.
+
+```{r Final Model}
+Final <- predict(model1, testingset, type = "class")
+Final
+```
+
+
